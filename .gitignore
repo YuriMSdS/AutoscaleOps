@@ -1,0 +1,6 @@
+terraform.tfstate
+terraform.tfstate.backup
+.terraform
+*.log
+scaleops.pem
+.terraform.lock.hcl
