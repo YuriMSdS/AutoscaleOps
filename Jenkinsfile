@@ -1,62 +1,75 @@
 pipeline {
-    agent any
-    
-    parameters {
-        string(name: 'ACTION', defaultValue: 'upgrade', description: 'Define se vai escalar ou reduzir')
-    }
     environment {
-        TF_WORKDIR = "/Users/yurimiguel/Desktop/AutoscaleOps"
-        AWS_ACCESS_KEY_ID = credentials('aws-credentials')
-        AWS_SECRET_ACCESS_KEY = credentials('aws-credentials')
+        PATH = "/usr/local/bin:/usr/bin:/bin"
+        TF_WORKDIR = "/app/Infrastructure"
         AWS_REGION = 'us-east-2'
     }
+
+    agent any
 
     stages {
         stage('Preparação') {
             steps {
-              echo "Preparando o ambiente..."
-              sh 'terraform -version'
+                echo "Iniciando ambiente com Docker..."
+                sh '''
+                echo "Verificando versões..."
+                terraform -version
+                aws --version
+                '''
             }
         }
-        stage ('Monitoramento de recursos'){
-            steps {
-                echo "Monitorando recursos..."
 
+        stage('Monitoramento de Recursos') {
+            steps {
+                echo "Monitorando uso de recursos..."
                 script {
-                    def result = sh (
-                      script: "${TF_WORKDIR}/monitor_resources.sh",
-                      returnStatus: true
-                    )
-                    if (result == 1) {
-                        currentBuild.description = "Scale up necessário"
+                    def result = sh(
+                        script: "bash ${TF_WORKDIR}/monitor/monitor_resources.sh",
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (result == "1") {
                         env.ACTION = "scale_up"
-                    } else if (result == 2) {
-                        currentBuild.description = "Scale down necessário"
+                    } else if (result == "2") {
                         env.ACTION = "scale_down"
                     } else {
-                        currentBuild.description = "Nenhuma ação necessária"
-                        env.ACTION= "no_action"
+                        env.ACTION = "no_action"
                     }
-
                 }
-                
             }
         }
-        stage ('Aplicar açãp necessária') {
-            
+
+        stage('Aplicar Mudanças com Terraform') {
             when {
                 expression { env.ACTION == "scale_up" || env.ACTION == "scale_down" }
             }
             steps {
                 script {
-                    if (env.ACTION == "scale_up") {
-                        sh "${env.TF_WORKDIR}/scale_up.sh"
-                    } else if (env.ACTION == "scale_down") {
-                        sh "${env.TF_WORKDIR}/scale_down.sh"
-                    }
+                    def instanceType = env.ACTION == "scale_up" ? "t2.small" : "t2.nano"
+                    echo "Executando ${env.ACTION.replace('_', ' ')} para ${instanceType}..."
+                    sh """
+                    cd ${TF_WORKDIR}
+                    terraform init
+                    terraform apply -auto-approve -var="instance_type=${instanceType}"
+                    """
                 }
             }
+        }
 
+        stage('Conexão SSH na VM') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'ssh-key-id', keyFileVariable: 'SSH_KEY')]) {
+                    sh '''
+                    ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@IP_DA_VM "echo 'Conexão SSH realizada'"
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline finalizada!"
         }
     }
 }
