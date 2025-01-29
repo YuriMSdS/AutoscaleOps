@@ -7,3 +7,7 @@ variable "private_key_path" {
   type = string
   default = "/Users/yurimiguel/Desktop/AutoscaleOps/scaleops.pem"
 }
+
+variable "region" {}
+variable "access_key" {}
+variable "secret_key" {}
