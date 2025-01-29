@@ -18,6 +18,15 @@ pipeline {
                 '''
             }
         }
+        stage('Conexão SSH na VM') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'ssh-key-id', keyFileVariable: 'SSH_KEY')]) {
+                    sh '''
+                    ssh -i $SSH_KEY -o StrictHostKeyChecking=no ec2-user@IP_INEX_NO_MOMENTO "echo 'Conexão SSH realizada'"
+                    '''
+                }
+            }
+        }
 
         stage('Monitoramento de Recursos') {
             steps {
@@ -52,16 +61,6 @@ pipeline {
                     terraform init
                     terraform apply -auto-approve -var="instance_type=${instanceType}"
                     """
-                }
-            }
-        }
-
-        stage('Conexão SSH na VM') {
-            steps {
-                withCredentials([sshUserPrivateKey(credentialsId: 'ssh-key-id', keyFileVariable: 'SSH_KEY')]) {
-                    sh '''
-                    ssh -i $SSH_KEY -o StrictHostKeyChecking=no ubuntu@IP_DA_VM "echo 'Conexão SSH realizada'"
-                    '''
                 }
             }
         }
